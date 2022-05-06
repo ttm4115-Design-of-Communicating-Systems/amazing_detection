@@ -4,14 +4,12 @@ from threading import Thread
 import cv2
 import paho.mqtt.client as mqtt
 from stmpy import Driver, Machine
+import time
 
 
 class OfficeRPIMovement:
     def __init__(self, rpi_id):
         self.id = rpi_id
-
-    def on_init(self):
-        print("init")
 
     def publish(self):
         print("Published ID")
@@ -21,7 +19,7 @@ class OfficeRPIMovement:
         print("test")
 
 
-t0 = {"source": "initial", "target": "idle", "effect": "on_init"}
+t0 = {"source": "initial", "target": "idle"}
 
 t1 = {
     "trigger": "movement_detected",
@@ -57,13 +55,15 @@ class MQTT_Client:
 
 
 class MovementDetection:
+
     def detectMovement():
         previous_frame = None
 
         video = cv2.VideoCapture(0)
 
         while True:
-            check, frame = video.read()
+            time.sleep(0.1)
+            ret, frame = video.read()
 
             motion = 0
 
@@ -72,24 +72,22 @@ class MovementDetection:
 
             if previous_frame is None:
                 previous_frame = current_frame
-                continue
 
             diff_frame = cv2.absdiff(previous_frame, current_frame)
 
-            thresh_frame = cv2.threshold(diff_frame, 30, 255, cv2.THRESH_BINARY)[1]
+            thresh_frame = cv2.threshold(diff_frame, 50, 255, cv2.THRESH_BINARY)[1]
             thresh_frame = cv2.dilate(thresh_frame, None, iterations=2)
 
-            cnts, _ = cv2.findContours(
+            contours, _ = cv2.findContours(
                 thresh_frame.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
 
-            for contour in cnts:
-                if cv2.contourArea(contour) < 10000:
-                    continue
-                motion = 1
+            for contour in contours:
+                if cv2.contourArea(contour) < 7500:
+                    motion = 1
 
             if motion == 1:
-                print("Motion detected!")
+                print("Movement detected!")
                 myclient.stm_driver.send(
                     "movement_detected", "movement", args=None, kwargs=None
                 )
@@ -112,7 +110,7 @@ if __name__ == "__main__":
     with open("./id.json") as f:
         data = json.load(f)
 
-    broker, port = "mqtt.item.ntnu.no", 1883
+    broker, port = "localhost", 1883
 
     m = OfficeRPIMovement(rpi_id=data["id"])
     m_machine = Machine(transitions=[t0, t1, t2, t3], obj=m, name="movement")
